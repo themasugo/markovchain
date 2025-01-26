@@ -1,0 +1,220 @@
+---
+title: "Álgebra Lineal. Reto 5 - PR2_T2025"
+author: "Marc Suárez González"
+date: "18 de diciembre de 2025"
+output: 
+  pdf_document:
+    number_sections: true 
+    toc: true           
+    toc_depth: 2
+    df_print: paged
+    fig_caption: true
+    highlight: kate
+    latex_engine: xelatex
+---
+
+# Pregunta 0: Tabla resumen de la Práctica 2
+
+Los resultados del informe corresponden al primer intento.
+
+```
+Valor de alpha = 0.55
+```
+
+# Pregunta 1:
+```{r}
+chooseCRANmirror(graphics = FALSE, ind = 1)
+install.packages("markovchain")
+
+# Valor de alpha primer intento
+alpha <- 0.55
+
+# Valores de alpha en matriz transición
+fila2_v1 <- 3 * (1 - alpha) / 5
+fila2_v2 <- 2 * (1 - alpha) / 5
+
+# Vector 'x' por filas
+x <- c(
+  0.10, 0.50, 0, 0, 0, 0.40,       # Fila 1: E
+  0, fila2_v1, alpha, 0, 0, fila2_v2, # Fila 2: V
+  0, 0, 0.20, 0.60, 0, 0.20,       # Fila 3: A
+  0, 0, 0, 0.10, 0.80, 0.10,       # Fila 4: P
+  0, 0, 0, 0, 1.00, 0,             # Fila 5: F
+  0, 0, 0, 0, 0, 1.00              # Fila 6: S
+)
+
+# Matriz de transición 'P'
+labels <- c("E", "V", "A", "P", "F", "S")
+byRow <- TRUE
+P <- matrix(data = x, byrow = byRow, nrow = 6, dimnames = list(labels, labels))
+print(P)
+
+# Comprobación suma probabilidades de filas
+suma_filas <- rowSums(P)
+print(suma_filas)
+
+# Suma probabilidades por columnas
+suma_columnas <- colSums(P)
+print(suma_columnas)
+
+```
+
+# Pregunta 2:
+
+Se sabe que, un estado es absorbente cuando una vez alcanzado, no se puede abandonar, es decir, 
+no existe una transición más que sea posible, pues la probabilidad de permanecer en ese estado es 1 y la probabilidad de todas las demás transiciones
+desde ese estado son 0. Para identificarlos deberemos identificar en la matriz definida 'P' qué fila contiene únicamente 1 y el resto valor 0.
+En nuestro caso observamos que se trata de los estados **'F'** y **'S'**.
+
+# Pregunta 3:
+
+Sabemos que la matriz de transición de 2 pasos se obtiene de elevar al cuadrado la matriz de transición de un solo paso. Lo mismo ocurre con la de tres pasos elevando 'P' a la tercera potencia.
+
+```{r}
+# Matriz de transición de 2 pasos
+P2 <- P %*% P 
+print(P2)
+
+# Matriz de transición de 3 pasos
+P3 <- P2 %*% P
+print(P3)
+
+```
+Se observa pues, que tanto en el segundo paso como en el tercero, la probabilidad de transición del estado 'E' al estado 'F' es de un **0%**.
+
+# Pregunta 4:
+
+```{r}
+# Se usa la semilla para asegurar que los resultados sean reproducibles.
+set.seed(123)
+
+# Función simulate_path
+simulate_path <- function(P, steps) {
+  current_state <- 1
+  path <- numeric(steps)
+  for (i in 1:steps) {
+    path[i] <- current_state
+    current_state <- sample(1:nrow(P), size = 1, prob = P[current_state, ])
+  }
+  return(path)
+}
+
+# Simular recorrido de 100 clientes durante 10 pasos
+simulations <- replicate(100, simulate_path(P, 10))
+
+# Verificar cuántos clientes llegan al estado F
+total_F <- apply(simulations, 2, function(path) any(path == 5))
+
+# Calcular porcentaje de clientes que llegan al estado F
+percentage_F <- mean(total_F) * 100
+
+print(percentage_F)
+
+```
+Podemos asegurar que, un **24%** de clientes han llegado al estado 'F' después de 10 pasos.
+
+
+# Pregunta 5: 
+
+En primer lugar, calculamos los valores y vectores propios de la matriz 'P'. 
+Para ello se procede a transponer 'P' dado que buscamos vectores propios de dicha matriz y con la libreria de markovchain podemos calcular el vector estacionario
+
+```{r}
+library(markovchain)
+mc <- new("markovchain", states = labels, transitionMatrix = P)
+steady_state <- steadyStates(mc)
+print(steady_state)
+
+```
+Podemos notar cuan absorbentes son los estados 'F' y 'S' y parece indicar que a largo plazo el sistema quedaría atrapado en dichos estados.
+
+
+# Pregunta 6:
+
+```{r}
+# Reordenar estaos de absorbentes a no absorbentes
+P_canonica <- P[c(5, 6, 1, 2, 3, 4), c(5, 6, 1, 2, 3, 4)]  # F, S, E, V, A, P
+
+# Crear las submatrices
+
+# Matriz identidad de dim 2
+I_kappa <- diag(2)  
+# Matriz nula 2x4
+zero_matrix <- matrix(0, nrow = 2, ncol = 4)  
+# Matriz de transiciones entre no absorbentes y absorbentes
+A <- P_canonica[3:6, 1:2]
+# Matriz de transiciones entre no absorbentes
+D <- P_canonica[3:6, 3:6]  
+
+# Submatrices
+cat("Matriz I_kappa:\n")
+print(I_kappa)
+cat("\nMatriz cero:\n")
+print(zero_matrix)
+cat("\nMatriz A:\n")
+print(A)
+cat("\nMatriz D:\n")
+print(D)
+
+
+```
+
+
+# Pregunta 7:
+
+```{r}
+# Creamos la matriz identidad de tamaño (n-kappa) = 4x4
+I_n_kappa <- diag(4)
+
+# Restamos la matriz D de I_n_kappa
+I_n_kappa_minus_D <- I_n_kappa - D
+
+# Invertmos la matriz (I_n_kappa - D)
+inv_I_n_kappa_minus_D <- solve(I_n_kappa_minus_D)
+
+# Calculamos Sr multiplicando la inversa por A
+Sr <- inv_I_n_kappa_minus_D %*% A
+
+# Resultado matriz Sr
+
+print(Sr)
+
+```
+
+
+# Pregunta 8:
+
+
+```{r}
+# Obtener la primera columna de Sr para la proporción de clientes que compran
+proporcion_compran <- Sr[, 1]
+
+# Obtener la segunda columna de Sr para la proporción de clientes que no compran
+proporcion_no_compran <- Sr[, 2]
+
+# Proporción de clientes que compran un producto a largo plazo
+print(proporcion_compran)
+
+# Proporción de clientes que no compran un producto a largo plazo
+print(proporcion_no_compran)
+
+
+```
+A partir de aquí, si dividimos el total de la proporción de transiciones para cada caso obtenemos lo siguiente:
+
+
+```{r}
+# Proporción que comprará
+res_compran <- (0.2790462 + 0.5022831 + 0.6666667 + 0.8888889)/4
+print(res_compran)
+
+# Proporción que no comprará
+res_no_compran <- (0.7209538 + 0.4977169 + 0.3333333 + 0.1111111)/4
+print(res_no_compran)
+```
+
+
+
+
+
+
